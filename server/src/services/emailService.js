@@ -6,7 +6,7 @@ let transporter = null;
 function getTransporter() {
   if (transporter) return transporter;
 
-  if (env.emailDevMode || !env.smtpHost || !env.smtpUser || !env.smtpPass) {
+  if (env.emailDevMode) {
     // Development preview transport using jsonTransport (no external network call)
     transporter = nodemailer.createTransport({
       jsonTransport: true,
@@ -33,7 +33,6 @@ function getTransporter() {
  */
 async function sendEmail({ to, subject, html, text }) {
   const mailTransporter = getTransporter();
-  const isDevPreview = env.emailDevMode || !env.smtpHost || !env.smtpUser || !env.smtpPass;
 
   const info = await mailTransporter.sendMail({
     from: env.emailFrom,
@@ -43,7 +42,7 @@ async function sendEmail({ to, subject, html, text }) {
     html,
   });
 
-  if (isDevPreview) {
+  if (env.emailDevMode) {
     console.log('\n================ [PlaceTrack Email Dev Preview] ================');
     console.log(`To:      ${to}`);
     console.log(`Subject: ${subject}`);

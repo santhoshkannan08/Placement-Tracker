@@ -188,12 +188,14 @@ PORT=5000
 NODE_ENV=development
 CLIENT_URL=http://localhost:5173
 DATABASE_URL="postgresql://postgres:YOUR_PASSWORD@localhost:5432/placetrack?schema=public"
+DATABASE_URL_UNPOOLED="postgresql://postgres:YOUR_PASSWORD@localhost:5432/placetrack?schema=public"
 JWT_SECRET="your-random-secret-key"
 JWT_EXPIRES_IN="7d"
 COOKIE_SECRET="your-random-cookie-secret"
 EMAIL_DEV_MODE=true
 ```
 > **Note:** If your PostgreSQL password contains special characters like `@`, URL-encode them (e.g., `@` becomes `%40`).
+> `DATABASE_URL_UNPOOLED` is used by Prisma migrations. For local PostgreSQL, it can match `DATABASE_URL`; on Neon, use the direct connection string while `DATABASE_URL` uses the pooled connection string.
 
 ### 4. Database Setup & Seed Data
 ```bash
@@ -217,18 +219,36 @@ cd client && npm run dev
 
 ## Configuring Real Email Reminders (SMTP)
 
-By default, `EMAIL_DEV_MODE=true` logs email previews to the backend console without sending real emails. To enable real SMTP delivery (e.g., Gmail App Password or Resend/Brevo SMTP):
-1. Set `EMAIL_DEV_MODE=false` in `server/.env`.
-2. Fill in `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, and `EMAIL_FROM`.
-3. Restart the backend server and click **Send Test Email** on the Reminders page.
+By default, development uses `EMAIL_DEV_MODE=true` and logs email previews to the backend console. Production defaults to real email delivery and fails at startup if the SMTP credentials are missing.
+
+For Gmail SMTP, enable 2-Step Verification and create an [app password](https://support.google.com/accounts/answer/185833). Use the app password, not your Google Account password. Store it as `SMTP_PASS` in the hosting provider's secret environment variables; do not commit it or paste it into source files.
+
+Configure these backend variables:
+```env
+EMAIL_DEV_MODE=false
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-google-app-password
+EMAIL_FROM="PlaceTrack <your-email@gmail.com>"
+```
+
+`EMAIL_FROM` should use the same address as `SMTP_USER`. After deployment, click **Send Test Email** on the Reminders page.
 
 ---
 
-## Deployment Notes
+## Deploy to Render and Vercel
 
-- **Frontend:** Deploy `client/` (`npm run build` -> `client/dist`) to Vercel or Netlify. Configure API proxy/CORS to point to your backend URL.
-- **Backend:** Deploy `server/` to Render, Railway, or Fly.io with a managed PostgreSQL database (Neon, Supabase, or Railway Postgres).
-- Set `NODE_ENV=production`, a strong `JWT_SECRET`, and `CLIENT_URL` to your deployed frontend origin.
+The repository includes a Render Blueprint at [`render.yaml`](render.yaml) and Vercel routing config at [`client/vercel.json`](client/vercel.json). The Vercel rewrite proxies `/api` through the frontend origin, preserving the app's HTTP-only cookie and CSRF flow without cross-site cookies. API rewrite caching is disabled.
+
+1. Connect the repository to Render and create a Blueprint service from `render.yaml`. The API service uses `server/`, applies Prisma migrations before startup, and exposes `/api/health`.
+2. In Render, set `DATABASE_URL` to the Neon pooled connection string and `DATABASE_URL_UNPOOLED` to the direct connection string for the same branch. Set `CLIENT_URL` to the exact Vercel production origin (for example, `https://your-project.vercel.app`, without a trailing slash).
+3. Add `SMTP_USER`, the Gmail app password as `SMTP_PASS`, and `EMAIL_FROM` to Render's environment variables. Render generates `JWT_SECRET` and `COOKIE_SECRET`; keep both secret values private.
+4. Import the repository in Vercel with the project root set to `client/`. Use `npm run build` and `dist` as the output directory. The Vercel rewrite targets `https://placetrack-api.onrender.com`; if Render assigns a different service URL, update that destination in `client/vercel.json` before deploying.
+5. After both services are deployed, verify the Render `/api/health` endpoint, sign in through the Vercel site, refresh a protected route, and send a test email.
+
+Render's API hostname is based on the Blueprint service name. If the service name or hostname changes, update the Vercel rewrite destination to match. Preview deployments use different origins; the API CORS allowlist is configured for the single `CLIENT_URL` production origin.
 
 ---
 
