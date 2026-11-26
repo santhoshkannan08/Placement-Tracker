@@ -1,7 +1,8 @@
 const dotenv = require('dotenv');
 const path = require('path');
 
-// Load from server/.env or root .env
+// Load .env.local (Neon env vars) first, then server/.env and root .env
+dotenv.config({ path: path.resolve(__dirname, '../../../.env.local') });
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
